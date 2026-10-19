@@ -109,4 +109,36 @@ class OrderApiTest extends TestCase
         $this->withHeaders($this->headers())->getJson('/api/orders?per_page=1000')
             ->assertUnprocessable();
     }
+
+    public function test_outbox_is_transactional_idempotent_and_contains_no_customer_data(): void
+    {
+        $order = $this->postJson('/api/orders', $this->payload(), $this->headers())->assertCreated();
+        $this->postJson('/api/orders', $this->payload(), $this->headers())->assertOk();
+        $this->assertDatabaseCount('outbox_messages', 1);
+
+        $this->postJson("/api/orders/{$order->json('id')}/transitions", [
+            'status' => 'approved', 'expected_version' => 1,
+        ], $this->headers())->assertOk();
+        $this->postJson("/api/orders/{$order->json('id')}/transitions", [
+            'status' => 'fulfilled', 'expected_version' => 1,
+        ], $this->headers())->assertStatus(409);
+        $this->assertDatabaseCount('outbox_messages', 2);
+
+        $pending = $this->withHeaders($this->headers())->getJson('/api/outbox?state=pending')
+            ->assertOk()->assertJsonPath('total', 2);
+        $first = $pending->json('data.0');
+        $this->assertSame('order.status.changed', $first['topic']);
+        $this->assertSame($order->json('id'), $first['payload']['order_id']);
+        $this->assertArrayNotHasKey('customer_email', $first['payload']);
+        $this->assertArrayNotHasKey('customer_name', $first['payload']);
+        $this->assertArrayNotHasKey('amount_cents', $first['payload']);
+
+        $ack = $this->postJson("/api/outbox/{$first['id']}/ack", [], $this->headers())
+            ->assertOk()->assertJsonPath('state', 'acked')->assertJsonPath('ack_actor', 'tests');
+        $this->postJson("/api/outbox/{$first['id']}/ack", [], $this->headers())
+            ->assertOk()->assertJsonPath('acked_at', $ack->json('acked_at'));
+        $this->withHeaders($this->headers())->getJson('/api/outbox?state=pending')
+            ->assertOk()->assertJsonPath('total', 1);
+        $this->withHeaders($this->headers())->getJson('/api/outbox?per_page=101')->assertUnprocessable();
+    }
 }

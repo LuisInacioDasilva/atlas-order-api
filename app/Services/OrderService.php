@@ -5,6 +5,7 @@ namespace App\Services;
 use App\Exceptions\OrderConflict;
 use App\Models\Order;
 use App\Models\OrderEvent;
+use App\Models\OutboxMessage;
 use Illuminate\Database\QueryException;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -43,12 +44,13 @@ class OrderService
                     'idempotency_key' => $key,
                     'request_hash' => $hash,
                 ]);
-                OrderEvent::create([
+                $event = OrderEvent::create([
                     'order_id' => $order->id,
                     'actor' => $actor,
                     'from_status' => null,
                     'to_status' => 'pending',
                 ]);
+                $this->recordOutbox($event, $order);
 
                 return ['order' => $order, 'created' => true];
             });
@@ -78,12 +80,13 @@ class OrderService
 
             $previous = $order->status;
             $order->update(['status' => $target, 'version' => $order->version + 1]);
-            OrderEvent::create([
+            $event = OrderEvent::create([
                 'order_id' => $order->id,
                 'actor' => $actor,
                 'from_status' => $previous,
                 'to_status' => $target,
             ]);
+            $this->recordOutbox($event, $order);
 
             return $order->refresh();
         });
@@ -97,5 +100,21 @@ class OrderService
         }
 
         return ['order' => $order, 'created' => false];
+    }
+
+    private function recordOutbox(OrderEvent $event, Order $order): void
+    {
+        OutboxMessage::create([
+            'id' => (string) Str::uuid(),
+            'order_event_id' => $event->id,
+            'topic' => 'order.status.changed',
+            'payload' => [
+                'event_id' => $event->id,
+                'order_id' => $order->id,
+                'status' => $order->status,
+                'version' => $order->version,
+            ],
+            'state' => 'pending',
+        ]);
     }
 }
