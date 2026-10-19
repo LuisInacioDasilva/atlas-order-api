@@ -10,13 +10,15 @@ O foco está nessas decisões, não em uma lista grande de endpoints.
 - Fluxo de estados definido: `pending → approved → fulfilled`, com cancelamento antes da conclusão.
 - Versão do pedido para evitar atualização concorrente silenciosa. Uma versão desatualizada retorna `409`.
 - Histórico de cada mudança, com origem identificada no servidor, estado anterior e novo estado.
+- Outbox transacional: cada evento de pedido gera uma mensagem interna sem dados pessoais, na mesma transação. O consumidor consulta pendências e confirma o processamento explicitamente.
 - API protegida por token configurado fora do código. Sem token configurado, ela não aceita chamadas.
 - Painel de leitura disponível apenas em ambiente `local`, com dados de demonstração sintéticos.
 - Testes de API, formatação e CI.
 
 ```text
 HTTP → token → validação → OrderService → orders
-                                     └──────→ order_events
+                                     ├──────→ order_events
+                                     └──────→ outbox_messages → consumidor / ACK
 ```
 
 ## Rodar localmente
@@ -64,6 +66,8 @@ curl -X POST http://127.0.0.1:8000/api/orders/ID_DO_PEDIDO/transitions \
 | `POST` | `/api/orders` | Cria pedido; exige `Idempotency-Key` |
 | `GET` | `/api/orders/{id}` | Pedido e histórico |
 | `POST` | `/api/orders/{id}/transitions` | Muda status com `expected_version` |
+| `GET` | `/api/outbox` | Lista paginada; filtro `state=pending` ou `acked` |
+| `POST` | `/api/outbox/{id}/ack` | Confirma uma mensagem após o consumidor processá-la |
 
 ## Decisões de implementação
 
@@ -73,6 +77,8 @@ As transições rodam em transação e usam bloqueio de linha quando o banco sup
 
 O identificador de quem chamou a API vem da configuração do servidor, não de um cabeçalho enviado pelo cliente. O painel não abre em produção e a API fica indisponível quando não há token configurado. Para um cenário com vários clientes, eu substituiria o token único por autenticação por cliente com rotação e permissões próprias.
 
+O outbox evita o caso em que o pedido muda, mas a integração não sabe disso: pedido, auditoria e mensagem são gravados juntos. O payload contém só `event_id`, `order_id`, `status` e `version`. `order_event_id` é único; repetir uma criação idempotente não gera segunda mensagem. O endpoint de ACK é idempotente e mantém ator e horário do primeiro reconhecimento. **ACK não significa entrega a um cliente**: significa apenas que um consumidor externo confirmou seu próprio processamento. Esse consumidor deve deduplicar por `event_id`, pois pode reler a mesma mensagem antes do ACK. O projeto não envia webhooks por conta própria nem finge uma integração externa ativa.
+
 ## Testes e qualidade
 
 ```bash
@@ -80,13 +86,13 @@ php artisan test
 vendor/bin/pint --test
 ```
 
-Os testes cobrem autenticação, validação, repetição idempotente, conflito de payload, versão concorrente, transições inválidas e trilha de auditoria. A suíte usa SQLite em memória; o painel usa SQLite em arquivo para a demonstração.
+Os testes cobrem autenticação, validação, repetição idempotente, conflito de payload, versão concorrente, transições inválidas, trilha de auditoria e criação/ACK do outbox sem dados pessoais. A suíte usa SQLite em memória; o painel usa SQLite em arquivo para a demonstração.
 
 ## Deploy e rollback
 
 Em produção, configure `APP_ENV=production`, `APP_DEBUG=false`, `APP_KEY`, `ATLAS_API_TOKEN`, `ATLAS_API_CLIENT` e a conexão de banco por variáveis de ambiente. Use HTTPS e execute `php artisan migrate --force` antes de receber tráfego. O painel retorna `404` fora do ambiente local.
 
-A migração é reversível com `php artisan migrate:rollback --step=1`, mas o rollback remove `orders` e `order_events`. Faça backup antes de aplicá-lo em uma base com dados reais. Este repositório não inclui credenciais nem dados de clientes.
+A segunda migração cria `outbox_messages` com FK para `order_events`, índice de pendências e unicidade por evento. Em uma base existente, faça backup e aplique `php artisan migrate --force` antes de liberar tráfego. `php artisan migrate:rollback --step=1` remove o outbox e **seus dados**; outro passo remove pedidos e eventos. Pare o consumidor e valide backup/restore em staging antes de qualquer rollback com dados reais. Este repositório não inclui credenciais nem dados de clientes.
 
 ---
 
