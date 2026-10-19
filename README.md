@@ -60,7 +60,7 @@ curl -X POST http://127.0.0.1:8000/api/orders/ID_DO_PEDIDO/transitions \
 
 | Método | Rota | Uso |
 | --- | --- | --- |
-| `GET` | `/api/orders` | Lista paginada |
+| `GET` | `/api/orders` | Lista paginada; filtros exatos `status`, `customer_email`, valor mínimo/máximo em centavos e `per_page` (máximo 100) |
 | `POST` | `/api/orders` | Cria pedido; exige `Idempotency-Key` |
 | `GET` | `/api/orders/{id}` | Pedido e histórico |
 | `POST` | `/api/orders/{id}/transitions` | Muda status com `expected_version` |
@@ -87,3 +87,8 @@ Os testes cobrem autenticação, validação, repetição idempotente, conflito 
 Em produção, configure `APP_ENV=production`, `APP_DEBUG=false`, `APP_KEY`, `ATLAS_API_TOKEN`, `ATLAS_API_CLIENT` e a conexão de banco por variáveis de ambiente. Use HTTPS e execute `php artisan migrate --force` antes de receber tráfego. O painel retorna `404` fora do ambiente local.
 
 A migração é reversível com `php artisan migrate:rollback --step=1`, mas o rollback remove `orders` e `order_events`. Faça backup antes de aplicá-lo em uma base com dados reais. Este repositório não inclui credenciais nem dados de clientes.
+
+---
+
+<p align="center"><a href="https://github.com/LuisInacioDasilva"><img src="https://avatars.githubusercontent.com/u/88007376?v=4" width="82" height="82" alt="Foto de Luis da Silva" style="border-radius:50%"></a></p>
+<p align="center"><strong>Desenvolvido por Luis da Silva</strong><br>Back-end, dados, integrações e automação em produção.</p>

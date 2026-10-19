@@ -91,4 +91,22 @@ class OrderApiTest extends TestCase
             ->assertUnprocessable();
         $this->assertDatabaseCount('orders', 0);
     }
+
+    public function test_list_filters_and_paginates_without_mixing_customers(): void
+    {
+        $this->postJson('/api/orders', $this->payload(), $this->headers('first'))->assertCreated();
+        $this->postJson('/api/orders', [
+            ...$this->payload(), 'customer_name' => 'João',
+            'customer_email' => 'joao@example.test', 'amount_cents' => 9900,
+        ], $this->headers('second'))->assertCreated();
+
+        $this->withHeaders($this->headers())->getJson('/api/orders?customer_email=MARIA@example.test&min_amount_cents=12000')
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.customer_name', 'Maria Souza');
+        $this->withHeaders($this->headers())->getJson('/api/orders?max_amount_cents=10000&per_page=1')
+            ->assertOk()->assertJsonPath('total', 1)->assertJsonPath('data.0.customer_name', 'João');
+        $this->withHeaders($this->headers())->getJson('/api/orders?min_amount_cents=200&max_amount_cents=100')
+            ->assertUnprocessable();
+        $this->withHeaders($this->headers())->getJson('/api/orders?per_page=1000')
+            ->assertUnprocessable();
+    }
 }

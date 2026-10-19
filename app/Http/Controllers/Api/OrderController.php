@@ -15,9 +15,36 @@ class OrderController extends Controller
 {
     public function __construct(private readonly OrderService $orders) {}
 
-    public function index(): JsonResponse
+    public function index(Request $request): JsonResponse
     {
-        return response()->json(Order::query()->latest()->paginate(20));
+        $filters = $request->validate([
+            'status' => ['sometimes', Rule::in(['pending', 'approved', 'fulfilled', 'cancelled'])],
+            'customer_email' => ['sometimes', 'email', 'max:254'],
+            'min_amount_cents' => ['sometimes', 'integer', 'min:0'],
+            'max_amount_cents' => ['sometimes', 'integer', 'min:0'],
+            'per_page' => ['sometimes', 'integer', 'min:1', 'max:100'],
+        ]);
+        if (isset($filters['min_amount_cents'], $filters['max_amount_cents'])
+            && $filters['min_amount_cents'] > $filters['max_amount_cents']) {
+            return response()->json(['error' => 'O valor mínimo não pode exceder o máximo.'], 422);
+        }
+
+        $query = Order::query();
+        if (isset($filters['status'])) {
+            $query->where('status', $filters['status']);
+        }
+        if (isset($filters['customer_email'])) {
+            $query->where('customer_email', mb_strtolower(trim($filters['customer_email'])));
+        }
+        if (isset($filters['min_amount_cents'])) {
+            $query->where('amount_cents', '>=', $filters['min_amount_cents']);
+        }
+        if (isset($filters['max_amount_cents'])) {
+            $query->where('amount_cents', '<=', $filters['max_amount_cents']);
+        }
+
+        return response()->json($query->orderByDesc('created_at')->orderByDesc('id')
+            ->paginate($filters['per_page'] ?? 20)->withQueryString());
     }
 
     public function show(Order $order): JsonResponse

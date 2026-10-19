@@ -38,6 +38,9 @@
         .status.cancelled { background: #492733; color: #ffabb7; }
         .empty { padding: 34px 22px; color: #93a9c5; line-height: 1.5; }
         .foot { margin-top: 22px; color: #627b9b; font-size: 12px; }
+        .author { display: flex; align-items: center; gap: 12px; margin-top: 36px; padding-top: 20px; border-top: 1px solid #273950; color: #91a7c8; font-size: 13px; }
+        .author img { width: 44px; height: 44px; border-radius: 50%; object-fit: cover; }
+        .author a { color: #94bdfd; }
         @media (max-width: 760px) { .stats { grid-template-columns: repeat(2, 1fr); } main { padding: 28px 14px; } .hide-sm { display: none; } td, th { padding: 14px 10px; } }
     </style>
 </head>
@@ -75,6 +78,7 @@
         @endif
     </div>
     <p class="foot">Dados sintéticos para demonstração. O painel não é publicado em outros ambientes.</p>
+    <footer class="author"><img src="https://avatars.githubusercontent.com/u/88007376?v=4" alt="Foto de Luis da Silva"><span>Desenvolvido por <a href="https://github.com/LuisInacioDasilva">Luis da Silva</a> · Back-end, dados e integrações.</span></footer>
 </main>
 </body>
 </html>
