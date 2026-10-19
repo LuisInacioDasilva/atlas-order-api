@@ -1,3 +1,7 @@
+<p align="center"><img src="./assets/hero.svg" alt="Atlas Order API: pedidos, auditoria e outbox" width="960"></p>
+
+<p align="center"><a href="#rodar-localmente">Rodar</a> · <a href="#exemplo-de-chamada">Testar API</a> · <a href="#decisões-de-implementação">Arquitetura</a> · <a href="#testes-e-qualidade">Testes</a></p>
+
 # Atlas Order API
 
 API de pedidos em Laravel 13, com um painel local para acompanhar o fluxo. Construí este projeto para mostrar uma situação comum de back-end: a chamada pode chegar duas vezes, duas pessoas podem mudar o mesmo pedido ao mesmo tempo e, depois, alguém precisa entender quem alterou o quê.
